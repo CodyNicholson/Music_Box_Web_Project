@@ -1,0 +1,72 @@
+# Music Box Web stack: compiled server + production client build behind nginx.
+# Usage: docker compose up --build   then open http://localhost:5173
+# JWT_SECRET must be set (env or .env); pipeline-run.sh generates one in .env if missing.
+# CF_TEAM_DOMAIN and CF_POLICY_AUD (in .env) enable Google sign-in through Cloudflare Access.
+name: music_box_web
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: musicbox-postgres
+    environment:
+      POSTGRES_USER: musicbox
+      POSTGRES_PASSWORD: musicbox
+      POSTGRES_DB: musicbox
+    ports:
+      - "5434:5432"
+    volumes:
+      - musicbox_pg_data:/var/lib/postgresql/data
+      - ./server/prisma/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U musicbox -d musicbox"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  server:
+    build: ./server
+    container_name: musicbox-server
+    environment:
+      DATABASE_URL: postgresql://musicbox:musicbox@db:5432/musicbox
+      TEST_DATABASE_URL: postgresql://musicbox:musicbox@db:5432/musicbox_test
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set (at least 16 characters)}
+      # Served over HTTPS through the Cloudflare tunnel; browsers also accept secure cookies on http://localhost
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # Sign-in is Google OAuth through Cloudflare Access; the server verifies the Access JWT.
+      # Team domain: Zero Trust -> Settings -> Custom Pages. AUD: Access -> Applications -> (app) -> Overview.
+      CF_TEAM_DOMAIN: ${CF_TEAM_DOMAIN:-}
+      CF_POLICY_AUD: ${CF_POLICY_AUD:-}
+      # Local development only: trust X-Dev-Email / DEV_CF_EMAIL instead of Cloudflare Access
+      ALLOW_DEV_AUTH: ${ALLOW_DEV_AUTH:-false}
+      DEV_CF_EMAIL: ${DEV_CF_EMAIL:-}
+      PORT: "4000"
+      PRISMA_HIDE_UPDATE_MESSAGE: "1"
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Production build served by nginx on :80. The container name and tunnel-net match the
+  # Cloudflare tunnel route (http://rixus-frontend:80), so pipeline-run.sh can publish it.
+  client:
+    build: ./client
+    container_name: rixus-frontend
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - default
+      - tunnel-net
+    depends_on:
+      - server
+
+volumes:
+  musicbox_pg_data:
+
+networks:
+  tunnel-net:
+    external: true

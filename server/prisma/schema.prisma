@@ -1,0 +1,53 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // One-to-Many relationship: A User owns many Songs
+  songs Song[]
+
+  @@map("users")
+}
+
+model Song {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  title         String
+  bpm           Int      @default(120)
+  timeSignature String   @default("4/4") @map("time_signature")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Foreign key linking back to User
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One-to-Many relationship: A Song contains many Notes
+  notes SongNote[]
+
+  @@index([userId])
+  @@map("songs")
+}
+
+model SongNote {
+  id        String @id @default(uuid())
+  songId    String @map("song_id")
+  pitch     String // Scientific pitch notation, e.g., "C4", "F#5"
+  startTime Float  @map("start_time") // Start position in quarter-note beats (e.g., 0, 1.5)
+  duration  String // Musical duration shared by VexFlow & Tone.js: "w", "h", "q", "8", "16"
+  velocity  Float  @default(0.8) // Note volume (0.0 to 1.0)
+
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([songId])
+  @@map("song_notes")
+}
