@@ -3,3 +3,4 @@ dist/
 .env
 *.log
 claude_logs/
+pipeline-run.sh
