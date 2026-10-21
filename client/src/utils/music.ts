@@ -13,6 +13,37 @@ export const DURATION_OPTIONS: { value: NoteDuration; label: string }[] = [
 
 export const TIME_SIGNATURES: TimeSignature[] = ['4/4', '3/4', '6/8'];
 
+/** Chord shapes as semitone offsets from the root. */
+export const CHORD_TYPES: { value: string; label: string; intervals: number[] }[] = [
+  { value: 'maj', label: 'Major', intervals: [0, 4, 7] },
+  { value: 'min', label: 'Minor', intervals: [0, 3, 7] },
+  { value: 'dim', label: 'Diminished', intervals: [0, 3, 6] },
+  { value: 'aug', label: 'Augmented', intervals: [0, 4, 8] },
+  { value: 'sus2', label: 'Sus2', intervals: [0, 2, 7] },
+  { value: 'sus4', label: 'Sus4', intervals: [0, 5, 7] },
+  { value: '5', label: 'Power (5)', intervals: [0, 7, 12] },
+  { value: '6', label: 'Major 6th', intervals: [0, 4, 7, 9] },
+  { value: 'm6', label: 'Minor 6th', intervals: [0, 3, 7, 9] },
+  { value: '7', label: 'Dominant 7th', intervals: [0, 4, 7, 10] },
+  { value: 'maj7', label: 'Major 7th', intervals: [0, 4, 7, 11] },
+  { value: 'm7', label: 'Minor 7th', intervals: [0, 3, 7, 10] },
+  { value: 'm7b5', label: 'Half-diminished 7th', intervals: [0, 3, 6, 10] },
+  { value: 'dim7', label: 'Diminished 7th', intervals: [0, 3, 6, 9] },
+  { value: 'add9', label: 'Add 9', intervals: [0, 4, 7, 14] },
+  { value: '9', label: 'Dominant 9th', intervals: [0, 4, 7, 10, 14] },
+];
+
+/** Highest pitch the piano samples cover. */
+const MAX_MIDI = 108; // C8
+
+/** Pitches of a chord built up from `root`, e.g. chordPitches('C4', 'maj') -> ['C4', 'E4', 'G4']. */
+export function chordPitches(root: string, type: string): string[] {
+  const chord = CHORD_TYPES.find((c) => c.value === type);
+  if (!chord) throw new Error(`Unknown chord type: ${type}`);
+  const base = pitchToMidi(root);
+  return chord.intervals.map((i) => base + i).filter((m) => m <= MAX_MIDI).map(midiToPitch);
+}
+
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const LETTER_SEMITONES: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const PITCH_RE = /^([A-G])(#|b)?(\d)$/;

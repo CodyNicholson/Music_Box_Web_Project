@@ -44,6 +44,15 @@ export const useSongStore = defineStore('song', () => {
     return created;
   }
 
+  /** Adds several notes in one go, e.g. every note of a chord. */
+  function addNotes(notes: Omit<NoteEvent, 'id'>[]): NoteEvent[] {
+    const created = notes.map((n) => ({ ...n, id: generateId() }));
+    song.value.notes.push(...created);
+    sortNotes(song.value.notes);
+    dirty.value = true;
+    return created;
+  }
+
   function updateNote(id: string, changes: Partial<Omit<NoteEvent, 'id'>>) {
     const note = song.value.notes.find((n) => n.id === id);
     if (!note) return;
@@ -115,6 +124,7 @@ export const useSongStore = defineStore('song', () => {
     load,
     markDirty,
     addNote,
+    addNotes,
     updateNote,
     removeNote,
     clearNotes,

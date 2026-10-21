@@ -2,7 +2,16 @@
 import { computed, reactive, ref, watch } from 'vue';
 import type { NoteDuration } from '@/types/music';
 import { useSongStore } from '@/stores/songStore';
-import { DURATION_BEATS, DURATION_OPTIONS, formatPosition, isValidPitch, pitchRange } from '@/utils/music';
+import {
+  CHORD_TYPES,
+  DURATION_BEATS,
+  DURATION_OPTIONS,
+  chordPitches,
+  formatPosition,
+  isValidPitch,
+  normalizePitch,
+  pitchRange,
+} from '@/utils/music';
 import { quantize } from '@/utils/measures';
 
 const store = useSongStore();
@@ -10,9 +19,15 @@ const PITCHES = pitchRange('C2', 'C7').reverse();
 
 const draft = reactive({ pitch: 'C4', startTime: 0, duration: 'q' as NoteDuration, velocity: 0.8 });
 const stepInput = ref(true);
+/** Chord type to add, or '' for a single note. Only applies when adding, not when editing a note. */
+const chordType = ref('');
 const error = ref<string | null>(null);
 
 const selected = computed(() => store.selectedNote);
+const addingChord = computed(() => !selected.value && chordType.value !== '');
+const chordPreview = computed(() =>
+  addingChord.value && isValidPitch(draft.pitch) ? chordPitches(draft.pitch, chordType.value) : [],
+);
 const durationLabel = (d: NoteDuration) => DURATION_OPTIONS.find((o) => o.value === d)?.label ?? d;
 
 // Selecting a note (here or on the score) loads it into the form.
@@ -40,7 +55,16 @@ function validDraft() {
 function addNote() {
   const note = validDraft();
   if (!note) return;
-  store.addNote(note);
+  if (addingChord.value) {
+    // Every chord note goes on the same beat; skip pitches already sounding there.
+    const taken = new Set(
+      store.song.notes.filter((n) => n.startTime === note.startTime).map((n) => normalizePitch(n.pitch)),
+    );
+    const pitches = chordPitches(note.pitch, chordType.value).filter((p) => !taken.has(p));
+    if (pitches.length) store.addNotes(pitches.map((pitch) => ({ ...note, pitch })));
+  } else {
+    store.addNote(note);
+  }
   store.selectedNoteId = null;
   draft.startTime = note.startTime + DURATION_BEATS[note.duration];
 }
@@ -73,15 +97,23 @@ defineExpose({ handlePianoPress });
   <section class="editor panel">
     <header class="editor-header">
       <h2>{{ selected ? 'Edit note' : 'Add notes' }}</h2>
-      <label class="toggle" title="When on, each piano key you press adds a note and moves the start beat forward">
+      <label class="toggle" title="When on, each piano key you press adds a note (or a chord on that root) and moves the start beat forward">
         <input v-model="stepInput" type="checkbox" />
         Step input from piano
       </label>
     </header>
 
     <form class="note-form" @submit.prevent="selected ? updateSelected() : addNote()">
+      <label v-if="!selected" class="field">
+        <span>Chord</span>
+        <select v-model="chordType">
+          <option value="">Single note</option>
+          <option v-for="c in CHORD_TYPES" :key="c.value" :value="c.value">{{ c.label }}</option>
+        </select>
+        <small v-if="chordPreview.length" class="muted mono">{{ chordPreview.join(' ') }}</small>
+      </label>
       <label class="field">
-        <span>Pitch</span>
+        <span>{{ addingChord ? 'Root' : 'Pitch' }}</span>
         <select v-model="draft.pitch">
           <option v-for="p in PITCHES" :key="p" :value="p">{{ p }}</option>
         </select>
@@ -107,7 +139,7 @@ defineExpose({ handlePianoPress });
           <button type="button" class="btn btn-danger" @click="store.removeNote(selected.id)">Delete</button>
           <button type="button" class="btn" @click="deselect">Done</button>
         </template>
-        <button v-else type="submit" class="btn btn-primary">Add note</button>
+        <button v-else type="submit" class="btn btn-primary">{{ addingChord ? 'Add chord' : 'Add note' }}</button>
       </div>
       <p v-if="error" class="error small">{{ error }}</p>
     </form>
