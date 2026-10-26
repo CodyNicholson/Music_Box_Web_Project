@@ -47,14 +47,21 @@ A bare `Cf-Access-Authenticated-User-Email` header is rejected.
 - **Local development** (no Access on localhost): set `ALLOW_DEV_AUTH=true` (and optionally
   `DEV_CF_EMAIL`) in `.env`. The login page then takes any email. Never enable this in production.
 
-### Deploying through the Cloudflare tunnel
-
-`./pipeline-run.sh` pulls the latest code, removes **all** Docker containers on the host, starts
-the Cloudflare tunnel (needs `TUNNEL_TOKEN` set globally, e.g. in `/etc/environment`), and starts
-this stack. The client container is named `rixus-frontend` on the `tunnel-net` network to match
-the tunnel's route.
-
 The piano samples load from `tonejs.github.io`, so playback needs internet access.
+
+### Security
+
+- Host ports are bound to `127.0.0.1` only. Docker publishes ports through its own iptables rules,
+  which bypass host firewalls such as `ufw`, so a bare `5173:80` would be reachable from outside.
+- `JWT_SECRET` and `DB_PASSWORD` have no fallback: compose refuses to start until they are set.
+- Postgres is only on `backend-net` with the API; the public nginx container cannot reach it.
+- The API trusts only a verified `Cf-Access-Jwt-Assertion` (signature, audience, issuer), never
+  a bare `Cf-Access-Authenticated-User-Email` header.
+- nginx runs unprivileged (uid 101) with all capabilities dropped, `no-new-privileges`, and memory,
+  CPU and process limits; the other containers have `no-new-privileges` and memory and process limits.
+- Every response carries `Content-Security-Policy` (same-origin only, no framing),
+  `X-Content-Type-Options`, `Referrer-Policy` and `Permissions-Policy`
+  (`client/security-headers.conf`); the nginx version is hidden.
 
 ### Running tests
 
