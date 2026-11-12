@@ -129,11 +129,25 @@ function layoutStaff(notes: NoteEvent[], measureBeats: number, measureCount: num
   return measures;
 }
 
+/** Number of measures needed to show every note (at least `minMeasures`). */
+export function measureCountFor(notes: NoteEvent[], timeSignature: TimeSignature, minMeasures = 1): number {
+  const measureBeats = beatsPerMeasure(timeSignature);
+  const lastStart = notes.reduce((max, n) => Math.max(max, quantize(n.startTime)), -1);
+  return Math.max(minMeasures, Math.floor(lastStart / measureBeats) + 1);
+}
+
+/**
+ * Lays out the notes of a single staff over `measureCount` measures. Every staff in a score is laid
+ * out over the same measure count, so all instruments' bars line up.
+ */
+export function layoutStaffMeasures(notes: NoteEvent[], timeSignature: TimeSignature, measureCount: number): StaffEvent[][] {
+  return layoutStaff(notes, beatsPerMeasure(timeSignature), measureCount);
+}
+
 /** Groups a song's notes into grand-staff measures, inserting rests for silent gaps. */
 export function groupIntoMeasures(notes: NoteEvent[], timeSignature: TimeSignature, minMeasures = 1): Measure[] {
   const measureBeats = beatsPerMeasure(timeSignature);
-  const lastStart = notes.reduce((max, n) => Math.max(max, quantize(n.startTime)), -1);
-  const measureCount = Math.max(minMeasures, Math.floor(lastStart / measureBeats) + 1);
+  const measureCount = measureCountFor(notes, timeSignature, minMeasures);
 
   const treble = layoutStaff(notes.filter((n) => clefFor(n.pitch) === 'treble'), measureBeats, measureCount);
   const bass = layoutStaff(notes.filter((n) => clefFor(n.pitch) === 'bass'), measureBeats, measureCount);

@@ -1,26 +1,28 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useSongStore } from '@/stores/songStore';
-import { usePianoAudio } from '@/composables/usePianoAudio';
+import { useAudioEngine } from '@/composables/useAudioEngine';
 import { pitchRange, pitchToMidi, normalizePitch } from '@/utils/music';
 
-const props = withDefaults(defineProps<{ low?: string; high?: string; highlightPitch?: string | null }>(), {
-  low: 'C3',
-  high: 'C6',
-  highlightPitch: null,
-});
+const props = withDefaults(
+  defineProps<{ low?: string; high?: string; highlightPitch?: string | null; title?: string }>(),
+  { low: 'C3', high: 'C6', highlightPitch: null, title: 'Piano' },
+);
 const emit = defineEmits<{ press: [pitch: string] }>();
 
 const store = useSongStore();
-const audio = usePianoAudio();
+const audio = useAudioEngine();
 
 // Computer keyboard: two rows mapped to a chromatic octave and a bit, starting at `baseOctave`.
 const KEY_OFFSETS: Record<string, number> = {
   a: 0, w: 1, s: 2, e: 3, d: 4, f: 5, t: 6, g: 7, y: 8, h: 9, u: 10, j: 11, k: 12, o: 13, l: 14,
 };
-const baseOctave = ref(4);
 const minOctave = computed(() => Number(props.low.slice(-1)));
 const maxOctave = computed(() => Number(props.high.slice(-1)) - 1);
+const clampOctave = (o: number) => Math.min(maxOctave.value, Math.max(minOctave.value, o));
+const baseOctave = ref(clampOctave(4));
+// A different instrument brings a different keyboard range.
+watch(() => [props.low, props.high], () => (baseOctave.value = clampOctave(baseOctave.value)));
 
 const keys = computed(() => {
   const pitches = pitchRange(props.low, props.high);
@@ -119,13 +121,13 @@ onBeforeUnmount(() => {
 <template>
   <section class="piano-panel panel">
     <header class="piano-header">
-      <h2>Piano</h2>
+      <h2>{{ title }}</h2>
       <p class="hint">
         Click, or type <kbd>A</kbd>–<kbd>L</kbd> (black keys <kbd>W</kbd> <kbd>E</kbd> <kbd>T</kbd> <kbd>Y</kbd>
         <kbd>U</kbd> <kbd>O</kbd>). <kbd>Z</kbd>/<kbd>X</kbd> shift octave · now C{{ baseOctave }}
       </p>
     </header>
-    <div class="piano" role="group" aria-label="Virtual piano" @pointerup="releasePointers" @pointerleave="releasePointers">
+    <div class="piano" role="group" :aria-label="`${title} keyboard`" @pointerup="releasePointers" @pointerleave="releasePointers">
       <button
         v-for="key in whiteKeys"
         :key="key.pitch"

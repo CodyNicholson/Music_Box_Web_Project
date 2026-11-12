@@ -62,3 +62,19 @@ describe('groupIntoMeasures', () => {
     expect(m!.treble[1]).toMatchObject({ kind: 'note', startBeat: 0.25, vfDuration: '16' });
   });
 });
+
+describe('multi-staff layout', () => {
+  it('lays every staff over the same number of measures', async () => {
+    const { layoutStaffMeasures, measureCountFor } = await import('./measures');
+    const violin = [note('A4', 0, 'q')];
+    const cello = [note('C3', 9, 'h')];
+    const count = measureCountFor([...violin, ...cello], '4/4', 1);
+    expect(count).toBe(3);
+    const v = layoutStaffMeasures(violin, '4/4', count);
+    const c = layoutStaffMeasures(cello, '4/4', count);
+    expect(v).toHaveLength(3);
+    expect(c).toHaveLength(3);
+    expect(shape(v[2]!)).toEqual(['r:w']);
+    expect(shape(c[2]!)).toEqual(['r:q', 'C3:h', 'r:q']);
+  });
+});

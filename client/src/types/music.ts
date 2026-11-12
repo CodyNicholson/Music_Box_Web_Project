@@ -10,13 +10,33 @@ export interface NoteEvent {
   velocity?: number; // 0.1 to 1.0
 }
 
+export type InstrumentId =
+  | 'piano'
+  | 'acoustic-guitar'
+  | 'electric-guitar'
+  | 'bass-guitar'
+  | 'violin'
+  | 'cello'
+  | 'flute'
+  | 'drums';
+
+/** One instrument in a song, drawn as its own staff (or grand staff) and played together with the others. */
+export interface Track {
+  id: string;
+  name: string;
+  instrument: InstrumentId;
+  volume: number; // 0 to 1, multiplied into each note's velocity
+  muted: boolean;
+  notes: NoteEvent[]; // Sounding pitches; drum notes use General MIDI drum pitches (C2 = kick, D2 = snare, ...)
+}
+
 export interface Song {
   id?: string;
   userId?: string;
   title: string;
   bpm: number; // Quarter notes per minute
   timeSignature: TimeSignature;
-  notes: NoteEvent[];
+  tracks: Track[];
 }
 
 export interface SongSummary {
@@ -25,6 +45,7 @@ export interface SongSummary {
   bpm: number;
   timeSignature: TimeSignature;
   noteCount: number;
+  instruments: InstrumentId[];
   createdAt: string;
   updatedAt: string;
 }

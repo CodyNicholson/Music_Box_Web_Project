@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useSongStore } from '@/stores/songStore';
-import { usePianoAudio } from '@/composables/usePianoAudio';
+import { useAudioEngine } from '@/composables/useAudioEngine';
 import { useSheetRenderer } from '@/composables/useSheetRenderer';
 
 const store = useSongStore();
-const audio = usePianoAudio();
+const audio = useAudioEngine();
 
 const scroller = ref<HTMLElement | null>(null);
 const canvas = ref<HTMLElement | null>(null);
@@ -43,8 +43,12 @@ function rerender() {
 }
 
 onMounted(rerender);
+// Mute and volume don't change the drawing, so only watch what does.
 watch(
-  () => [store.song.notes, store.song.timeSignature],
+  () => [
+    store.song.timeSignature,
+    store.song.tracks.map((t) => [t.id, t.name, t.instrument, t.notes.map((n) => [n.id, n.pitch, n.startTime, n.duration])]),
+  ],
   () => nextTick(rerender),
   { deep: true },
 );
@@ -67,21 +71,39 @@ watch(
 /** Clicking a note selects it; clicking a chord again cycles through its notes. */
 function onClick(e: MouseEvent) {
   const group = (e.target as Element).closest('[data-note-ids]');
-  if (!group) return;
-  const ids = group.getAttribute('data-note-ids')!.split(' ');
-  const current = ids.indexOf(store.selectedNoteId ?? '');
-  store.selectedNoteId = ids[(current + 1) % ids.length]!;
+  if (group) {
+    const ids = group.getAttribute('data-note-ids')!.split(' ');
+    const current = ids.indexOf(store.selectedNoteId ?? '');
+    store.selectNote(ids[(current + 1) % ids.length]!);
+    return;
+  }
+  // Clicking an instrument's staff (or its name) makes it the one you are writing for.
+  const y = e.clientY - (e.currentTarget as HTMLElement).getBoundingClientRect().top;
+  const band = layout.value?.trackBands.find((b) => y >= b.top && y <= b.bottom);
+  if (band) store.setActiveTrack(band.trackId);
 }
+
+const activeBand = computed(() => layout.value?.trackBands.find((b) => b.trackId === store.activeTrack.id) ?? null);
+const multiTrack = computed(() => store.song.tracks.length > 1);
 </script>
 
 <template>
   <section class="sheet panel">
     <header class="sheet-header">
       <h2>Score</h2>
-      <p class="hint">Click a note to edit it. Notes from middle C up go on the treble staff.</p>
+      <p class="hint">
+        Click a note to edit it, or a staff to write for that instrument. Piano notes from middle C up go
+        on the treble staff.
+      </p>
     </header>
     <div ref="scroller" class="paper">
       <div class="stage" :style="layout ? { width: `${layout.width}px`, height: `${layout.height}px` } : undefined">
+        <div
+          v-if="multiTrack && activeBand"
+          class="active-band"
+          :style="{ top: `${activeBand.top}px`, height: `${activeBand.bottom - activeBand.top}px` }"
+          aria-hidden="true"
+        />
         <div ref="canvas" class="canvas" @click="onClick" />
         <div
           v-show="showPlayhead"
@@ -115,8 +137,20 @@ function onClick(e: MouseEvent) {
   position: relative;
   min-height: 250px;
 }
+.canvas {
+  position: relative;
+}
 .canvas :deep(svg) {
   display: block;
+}
+.active-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgb(110 168 254 / 9%);
+  border-left: 3px solid var(--accent-2);
+  pointer-events: none;
+  transition: top 120ms, height 120ms;
 }
 .canvas :deep(.mb-note) {
   cursor: pointer;

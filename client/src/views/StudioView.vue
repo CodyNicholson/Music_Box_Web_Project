@@ -1,20 +1,24 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { useSongStore, blankSong } from '@/stores/songStore';
-import { usePianoAudio } from '@/composables/usePianoAudio';
+import { useAudioEngine } from '@/composables/useAudioEngine';
 import { songsApi } from '@/api/songs.api';
 import { ApiError } from '@/api/http';
-import { exampleSong } from '@/utils/examples';
+import { findExample } from '@/utils/examples';
 import TransportBar from '@/components/studio/TransportBar.vue';
 import SheetMusicStage from '@/components/studio/SheetMusicStage.vue';
 import NoteEditorPanel from '@/components/studio/NoteEditorPanel.vue';
 import VirtualPiano from '@/components/studio/VirtualPiano.vue';
+import DrumPad from '@/components/studio/DrumPad.vue';
+import InstrumentTracks from '@/components/studio/InstrumentTracks.vue';
+import { instrument } from '@/utils/instruments';
 
 const route = useRoute();
 const router = useRouter();
 const store = useSongStore();
-const audio = usePianoAudio();
+const audio = useAudioEngine();
+const activeInstrument = computed(() => instrument(store.activeTrack.instrument));
 
 const loading = ref(false);
 const loadError = ref<string | null>(null);
@@ -29,8 +33,9 @@ async function loadFromRoute() {
   const id = typeof route.params.id === 'string' ? route.params.id : undefined;
 
   if (!id) {
-    store.load(route.query.example === 'ode' ? exampleSong() : blankSong());
-    if (route.query.example) store.markDirty();
+    const example = findExample(route.query.example);
+    store.load(example ? example.build() : blankSong());
+    if (example) store.markDirty();
     return;
   }
   if (store.song.id === id) return; // just saved a new song and moved to its URL
@@ -67,7 +72,7 @@ function onKeyDown(e: KeyboardEvent) {
     e.preventDefault();
     transport.value?.togglePlay();
   } else if (e.key === 'Escape') {
-    store.selectedNoteId = null;
+    store.selectNote(null);
   } else if ((e.key === 'Delete' || e.key === 'Backspace') && store.selectedNoteId && !isTyping(e.target)) {
     store.removeNote(store.selectedNoteId);
   }
@@ -77,8 +82,14 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
   if (store.dirty) e.preventDefault();
 }
 
+// Start downloading each instrument's samples as soon as it appears in the song.
+watch(
+  () => store.song.tracks.map((t) => t.instrument),
+  (ids) => audio.preload(ids),
+  { immediate: true },
+);
+
 onMounted(() => {
-  audio.preload();
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('beforeunload', onBeforeUnload);
 });
@@ -108,10 +119,21 @@ watch(() => [route.params.id, route.query.example], loadFromRoute, { immediate: 
     </div>
     <template v-else>
       <TransportBar ref="transport" :save-error="saveError" @save="save" />
+      <InstrumentTracks />
       <SheetMusicStage />
       <div class="lower">
-        <VirtualPiano
+        <DrumPad
+          v-if="activeInstrument.kind === 'drums'"
           class="piano-area"
+          :highlight-pitch="store.selectedNote?.pitch ?? null"
+          @press="editor?.handlePianoPress($event)"
+        />
+        <VirtualPiano
+          v-else
+          class="piano-area"
+          :low="activeInstrument.keyboard[0]"
+          :high="activeInstrument.keyboard[1]"
+          :title="`${activeInstrument.icon} ${store.activeTrack.name}`"
           :highlight-pitch="store.selectedNote?.pitch ?? null"
           @press="editor?.handlePianoPress($event)"
         />

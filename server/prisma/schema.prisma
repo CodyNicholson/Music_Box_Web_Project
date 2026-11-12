@@ -31,23 +31,41 @@ model Song {
   // Foreign key linking back to User
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // One-to-Many relationship: A Song contains many Notes
-  notes SongNote[]
+  // One-to-Many relationship: A Song has one or more instrument tracks (one staff group each)
+  tracks SongTrack[]
 
   @@index([userId])
   @@map("songs")
 }
 
+model SongTrack {
+  id         String  @id @default(uuid())
+  songId     String  @map("song_id")
+  position   Int // Order of the track's staves in the score, top to bottom (0-based)
+  name       String
+  instrument String  @default("piano") // piano, acoustic-guitar, electric-guitar, bass-guitar, violin, cello, flute, drums
+  volume     Float   @default(0.8) // Track volume (0.0 to 1.0), multiplied into each note's velocity
+  muted      Boolean @default(false)
+
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  // One-to-Many relationship: A Track contains many Notes
+  notes SongNote[]
+
+  @@unique([songId, position])
+  @@map("song_tracks")
+}
+
 model SongNote {
   id        String @id @default(uuid())
-  songId    String @map("song_id")
-  pitch     String // Scientific pitch notation, e.g., "C4", "F#5"
+  trackId   String @map("track_id")
+  pitch     String // Scientific pitch notation, e.g., "C4", "F#5" (sounding pitch; for drums a General MIDI drum note)
   startTime Float  @map("start_time") // Start position in quarter-note beats (e.g., 0, 1.5)
   duration  String // Musical duration shared by VexFlow & Tone.js: "w", "h", "q", "8", "16"
   velocity  Float  @default(0.8) // Note volume (0.0 to 1.0)
 
-  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+  track SongTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
 
-  @@index([songId])
+  @@index([trackId])
   @@map("song_notes")
 }

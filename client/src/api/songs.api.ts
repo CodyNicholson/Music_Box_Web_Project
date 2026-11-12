@@ -1,10 +1,19 @@
 import type { Song, SongSummary } from '@/types/music';
 import { request } from './http';
 
-type SongPayload = Pick<Song, 'title' | 'bpm' | 'timeSignature' | 'notes'>;
-
-function payload(song: Song): SongPayload {
-  return { title: song.title, bpm: song.bpm, timeSignature: song.timeSignature, notes: song.notes };
+function payload(song: Song) {
+  return {
+    title: song.title,
+    bpm: song.bpm,
+    timeSignature: song.timeSignature,
+    tracks: song.tracks.map((t) => ({
+      name: t.name,
+      instrument: t.instrument,
+      volume: t.volume,
+      muted: t.muted,
+      notes: t.notes,
+    })),
+  };
 }
 
 export const songsApi = {

@@ -3,6 +3,21 @@ import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import type { SongSummary } from '@/types/music';
 import { songsApi } from '@/api/songs.api';
+import { instrument } from '@/utils/instruments';
+import { EXAMPLES } from '@/utils/examples';
+
+// Built once to show each sample's tempo, metre and instruments; opening one builds a fresh copy.
+const samples = EXAMPLES.map((e) => {
+  const song = e.build();
+  return {
+    id: e.id,
+    title: e.title,
+    credit: e.credit,
+    bpm: song.bpm,
+    timeSignature: song.timeSignature,
+    instruments: song.tracks.map((t) => t.instrument),
+  };
+});
 
 const router = useRouter();
 const songs = ref<SongSummary[]>([]);
@@ -33,6 +48,10 @@ async function remove(song: SongSummary) {
   }
 }
 
+function showSamples() {
+  document.getElementById('samples')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 onMounted(load);
 </script>
 
@@ -44,9 +63,7 @@ onMounted(load);
         <p class="muted">Open a song to edit and play it, or start a new one.</p>
       </div>
       <div class="actions">
-        <button type="button" class="btn" @click="router.push({ name: 'studio', query: { example: 'ode' } })">
-          Start from example
-        </button>
+        <button type="button" class="btn" @click="showSamples">Sample songs</button>
         <button type="button" class="btn btn-primary" @click="router.push({ name: 'studio' })">New song</button>
       </div>
     </header>
@@ -56,7 +73,7 @@ onMounted(load);
 
     <div v-else-if="songs.length === 0 && !error" class="empty panel">
       <h2>No songs yet</h2>
-      <p class="muted">Create your first song, or open the "Ode to Joy" example and make it your own.</p>
+      <p class="muted">Create your first song, or open one of the sample songs below and make it your own.</p>
       <button type="button" class="btn btn-primary" @click="router.push({ name: 'studio' })">Create a song</button>
     </div>
 
@@ -68,11 +85,33 @@ onMounted(load);
             <span>{{ song.bpm }} BPM</span><span>{{ song.timeSignature }}</span
             ><span>{{ song.noteCount }} {{ song.noteCount === 1 ? 'note' : 'notes' }}</span>
           </p>
+          <p v-if="song.instruments?.length" class="instruments" :title="song.instruments.map((i) => instrument(i).label).join(', ')">
+            <span v-for="(id, i) in song.instruments" :key="i" class="chip">{{ instrument(id).icon }} {{ instrument(id).label }}</span>
+          </p>
           <p class="muted small">Updated {{ dateFormat.format(new Date(song.updatedAt)) }}</p>
         </RouterLink>
         <button type="button" class="btn btn-ghost small delete" @click="remove(song)">Delete</button>
       </li>
     </ul>
+
+    <section id="samples" class="samples" aria-labelledby="samples-title">
+      <h2 id="samples-title">Sample songs</h2>
+      <p class="muted">Well-known tunes, each arranged for a different band. Open one to play it, edit it and save your own copy.</p>
+      <ul class="song-grid">
+        <li v-for="sample in samples" :key="sample.id" class="song-card panel">
+          <RouterLink :to="{ name: 'studio', query: { example: sample.id } }" class="song-link">
+            <h2>{{ sample.title }}</h2>
+            <p class="muted small credit">{{ sample.credit }}</p>
+            <p class="meta">
+              <span>{{ sample.bpm }} BPM</span><span>{{ sample.timeSignature }}</span>
+            </p>
+            <p class="instruments" :title="sample.instruments.map((i) => instrument(i).label).join(', ')">
+              <span v-for="(id, i) in sample.instruments" :key="i" class="chip">{{ instrument(id).icon }} {{ instrument(id).label }}</span>
+            </p>
+          </RouterLink>
+        </li>
+      </ul>
+    </section>
   </div>
 </template>
 
@@ -127,10 +166,40 @@ h1 {
   margin: 0 0 8px;
   font-size: 0.9rem;
 }
+.instruments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 8px;
+}
+.chip {
+  font-size: 0.78rem;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
 .delete {
   position: absolute;
   top: 12px;
   right: 10px;
+}
+.samples {
+  margin-top: 40px;
+  scroll-margin-top: 16px;
+}
+.samples > h2 {
+  margin: 0 0 4px;
+}
+.samples > p {
+  margin: 0 0 16px;
+}
+.samples .song-link h2 {
+  padding-right: 0;
+}
+.credit {
+  margin: -4px 0 8px;
 }
 .empty {
   text-align: center;

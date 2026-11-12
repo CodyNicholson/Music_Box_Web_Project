@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import type { Song, SongNote } from '@prisma/client';
+import type { Song, SongNote, SongTrack } from '@prisma/client';
 import { prisma } from '../db.js';
 import { songSchema, type SongInput } from '../schemas.js';
 
-type SongWithNotes = Song & { notes: SongNote[] };
+type SongWithTracks = Song & { tracks: (SongTrack & { notes: SongNote[] })[] };
 
-function toSongDto(song: SongWithNotes) {
+function toSongDto(song: SongWithTracks) {
   return {
     id: song.id,
     userId: song.userId,
@@ -14,26 +14,46 @@ function toSongDto(song: SongWithNotes) {
     timeSignature: song.timeSignature,
     createdAt: song.createdAt,
     updatedAt: song.updatedAt,
-    notes: song.notes.map((n) => ({
-      id: n.id,
-      pitch: n.pitch,
-      startTime: n.startTime,
-      duration: n.duration,
-      velocity: n.velocity,
+    tracks: song.tracks.map((t) => ({
+      id: t.id,
+      name: t.name,
+      instrument: t.instrument,
+      volume: t.volume,
+      muted: t.muted,
+      notes: t.notes.map((n) => ({
+        id: n.id,
+        pitch: n.pitch,
+        startTime: n.startTime,
+        duration: n.duration,
+        velocity: n.velocity,
+      })),
     })),
   };
 }
 
-function noteRows(input: SongInput) {
-  return input.notes.map((n) => ({
-    pitch: n.pitch,
-    startTime: n.startTime,
-    duration: n.duration,
-    velocity: n.velocity ?? 0.8,
+/** Nested create input: the song's tracks in order, each with its note rows. */
+function trackRows(input: SongInput) {
+  return input.tracks.map((t, position) => ({
+    position,
+    name: t.name,
+    instrument: t.instrument,
+    volume: t.volume ?? 0.8,
+    muted: t.muted ?? false,
+    notes: {
+      create: t.notes.map((n) => ({
+        pitch: n.pitch,
+        startTime: n.startTime,
+        duration: n.duration,
+        velocity: n.velocity ?? 0.8,
+      })),
+    },
   }));
 }
 
-const notesInOrder = { orderBy: [{ startTime: 'asc' as const }, { pitch: 'asc' as const }] };
+const tracksInOrder = {
+  orderBy: { position: 'asc' as const },
+  include: { notes: { orderBy: [{ startTime: 'asc' as const }, { pitch: 'asc' as const }] } },
+};
 
 export async function songRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate);
@@ -42,7 +62,12 @@ export async function songRoutes(app: FastifyInstance) {
     const songs = await prisma.song.findMany({
       where: { userId: request.user.sub },
       orderBy: { updatedAt: 'desc' },
-      include: { _count: { select: { notes: true } } },
+      include: {
+        tracks: {
+          orderBy: { position: 'asc' },
+          select: { instrument: true, _count: { select: { notes: true } } },
+        },
+      },
     });
     return {
       songs: songs.map((s) => ({
@@ -52,7 +77,8 @@ export async function songRoutes(app: FastifyInstance) {
         timeSignature: s.timeSignature,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
-        noteCount: s._count.notes,
+        noteCount: s.tracks.reduce((sum, t) => sum + t._count.notes, 0),
+        instruments: s.tracks.map((t) => t.instrument),
       })),
     };
   });
@@ -60,7 +86,7 @@ export async function songRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>('/api/songs/:id', async (request, reply) => {
     const song = await prisma.song.findFirst({
       where: { id: request.params.id, userId: request.user.sub },
-      include: { notes: notesInOrder },
+      include: { tracks: tracksInOrder },
     });
     if (!song) return reply.code(404).send({ error: 'Song not found' });
     return { song: toSongDto(song) };
@@ -73,16 +99,16 @@ export async function songRoutes(app: FastifyInstance) {
     }
     const { title, bpm, timeSignature } = parsed.data;
 
-    // Nested create runs the song and its note rows in one transaction.
+    // Nested create runs the song, its tracks and their note rows in one transaction.
     const song = await prisma.song.create({
       data: {
         title,
         bpm,
         timeSignature,
         userId: request.user.sub,
-        notes: { create: noteRows(parsed.data) },
+        tracks: { create: trackRows(parsed.data) },
       },
-      include: { notes: notesInOrder },
+      include: { tracks: tracksInOrder },
     });
     return reply.code(201).send({ song: toSongDto(song) });
   });
@@ -101,15 +127,16 @@ export async function songRoutes(app: FastifyInstance) {
       });
       if (!owned) return null;
 
+      // Replacing the tracks also replaces their notes (cascading delete).
       return tx.song.update({
         where: { id: owned.id },
         data: {
           title,
           bpm,
           timeSignature,
-          notes: { deleteMany: {}, create: noteRows(parsed.data) },
+          tracks: { deleteMany: {}, create: trackRows(parsed.data) },
         },
-        include: { notes: notesInOrder },
+        include: { tracks: tracksInOrder },
       });
     });
 

@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useSongStore } from '@/stores/songStore';
-import { usePianoAudio } from '@/composables/usePianoAudio';
+import { useAudioEngine } from '@/composables/useAudioEngine';
+import { instrument } from '@/utils/instruments';
 import { TIME_SIGNATURES, formatPosition } from '@/utils/music';
 
 defineProps<{ saveError?: string | null }>();
 const emit = defineEmits<{ save: [] }>();
 
 const store = useSongStore();
-const audio = usePianoAudio();
+const audio = useAudioEngine();
+const loadingLabel = computed(() => audio.loading.value.map((id) => instrument(id).label.toLowerCase()).join(', '));
 
 const isPlaying = computed(() => audio.state.value === 'playing');
 const position = computed(() => formatPosition(Math.floor(audio.currentBeat.value), store.song.timeSignature));
@@ -43,7 +45,7 @@ defineExpose({ togglePlay });
       <button
         type="button"
         class="btn btn-primary round"
-        :disabled="store.song.notes.length === 0"
+        :disabled="store.noteCount === 0"
         :title="isPlaying ? 'Pause (Space)' : 'Play (Space)'"
         @click="togglePlay"
       >
@@ -76,7 +78,7 @@ defineExpose({ togglePlay });
     </label>
 
     <div class="save-area">
-      <span v-if="!audio.samplesLoaded.value" class="muted small">Loading piano…</span>
+      <span v-if="loadingLabel" class="muted small">Loading {{ loadingLabel }}…</span>
       <span v-if="saveError" class="error small">{{ saveError }}</span>
       <span v-else-if="store.dirty" class="muted small">Unsaved changes</span>
       <span v-else-if="store.song.id" class="muted small">Saved</span>
