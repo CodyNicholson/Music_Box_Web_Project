@@ -25,6 +25,8 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+    # Like the server and client: come back after a crash or a host reboot
+    restart: unless-stopped
     security_opt:
       - no-new-privileges:true
     mem_limit: 512m
