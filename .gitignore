@@ -4,3 +4,5 @@ dist/
 *.log
 claude_logs/
 pipeline-run.sh
+db.sh
+

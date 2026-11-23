@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "pinia": "^3.0.0",
     "tone": "^15.1.22",
     "vexflow": "^4.2.5",

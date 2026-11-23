@@ -105,6 +105,10 @@ docker compose exec client npm run build
   noteheads. A track with notes can switch between pitched instruments, but not to or from drums.
 - **Editor**: set pitch, start beat (quarter-note beats, snapped to sixteenths), duration and velocity.
   Click a note in the score or the list to edit it. Clicking a chord again cycles through its notes.
+- **Export MP3**: **Export MP3** in the studio, or **Download MP3** on any song or sample card in the
+  library, downloads the song as a 192 kbps stereo MP3 named after its title. It sounds the same as
+  Play (same samples, ring-out and room reverb); muted tracks are left out. The studio can keep
+  playing while a song exports, and unsaved edits in the studio are included.
 - **Shortcuts**: `Space` play/pause, `Ctrl+S` save, `Esc` deselect, `Del` delete the selected note.
 - BPM changes apply immediately, including during playback.
 
@@ -119,6 +123,11 @@ server/
   src/routes/songs.ts         GET/POST /api/songs, GET/PUT/DELETE /api/songs/:id (owner-scoped)
 client/src/
   composables/useAudioEngine.ts    shared Tone.js engine: one sampler per instrument, playback, auditioning
+  composables/useSongExport.ts     MP3 export: render, encode in a worker, download; progress and errors
+  audio/voices.ts                  instrument voices and the sample cache, shared by playback and export
+  audio/renderSong.ts              renders a song offline (Tone.OfflineContext), faster than real time
+  audio/encodeMp3.ts, mp3.worker.ts  lamejs MP3 encoding, run in a Web Worker
+  audio/mp3.ts                     peak limiting, silence trimming, file names (pure, tested)
   composables/useSheetRenderer.ts  VexFlow staves for every track, note→SVG map, beat→x timeline
   utils/instruments.ts             instrument definitions: staves/clefs, ranges, samples, drum kit map
   utils/measures.ts                groups notes into measures, fills gaps with rests (pure, tested)
@@ -135,6 +144,13 @@ callbacks go through `Tone.Draw.schedule`, so Vue state changes on the animation
 the note is heard. The playhead reads `transport.getTicksAtTime(Tone.immediate())`, the audible
 time rather than the look-ahead time, and interpolates between the x positions of the drawn
 notes.
+
+**MP3 export.** `renderSong` builds the same voices and room reverb as live playback inside a
+`Tone.OfflineContext` (every node gets that context explicitly, so the live Transport and audio graph
+are untouched) and schedules each note in seconds. It renders 6 s past the last note so tails can
+ring, turns the mix down if it peaks above 0.98, and trims the tail once it drops below about
+-66 dBFS. A Web Worker encodes the result with lamejs (`@breezystack/lamejs`, LGPL-3.0) so the page
+stays responsive, and only the worker bundle includes the encoder.
 
 **Tracks.** A song has one or more tracks (`song_tracks`: name, instrument, volume, muted, position),
 and each note belongs to a track. Notes store the sounding pitch; drum notes use General MIDI drum

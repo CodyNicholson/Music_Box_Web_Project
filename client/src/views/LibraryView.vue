@@ -4,7 +4,8 @@ import { useRouter } from 'vue-router';
 import type { SongSummary } from '@/types/music';
 import { songsApi } from '@/api/songs.api';
 import { instrument } from '@/utils/instruments';
-import { EXAMPLES } from '@/utils/examples';
+import { EXAMPLES, findExample } from '@/utils/examples';
+import { useSongExport } from '@/composables/useSongExport';
 
 // Built once to show each sample's tempo, metre and instruments; opening one builds a fresh copy.
 const samples = EXAMPLES.map((e) => {
@@ -46,6 +47,17 @@ async function remove(song: SongSummary) {
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not delete the song';
   }
+}
+
+const exporter = useSongExport();
+
+function exportSong(song: SongSummary) {
+  exporter.exportMp3(() => songsApi.get(song.id), song.id);
+}
+
+function exportSample(id: string) {
+  const example = findExample(id);
+  if (example) exporter.exportMp3(example.build(), `sample:${id}`);
 }
 
 function showSamples() {
@@ -90,6 +102,19 @@ onMounted(load);
           </p>
           <p class="muted small">Updated {{ dateFormat.format(new Date(song.updatedAt)) }}</p>
         </RouterLink>
+        <div class="card-actions">
+          <button
+            type="button"
+            class="btn small"
+            :disabled="exporter.busy.value || song.noteCount === 0"
+            :aria-busy="exporter.exportingKey.value === song.id"
+            title="Download as an MP3 (muted tracks are left out)"
+            @click="exportSong(song)"
+          >
+            {{ exporter.exportingKey.value === song.id ? exporter.status.value : 'Download MP3' }}
+          </button>
+          <span v-if="exporter.errorKey.value === song.id" class="error small" role="alert">{{ exporter.error.value }}</span>
+        </div>
         <button type="button" class="btn btn-ghost small delete" @click="remove(song)">Delete</button>
       </li>
     </ul>
@@ -109,6 +134,19 @@ onMounted(load);
               <span v-for="(id, i) in sample.instruments" :key="i" class="chip">{{ instrument(id).icon }} {{ instrument(id).label }}</span>
             </p>
           </RouterLink>
+          <div class="card-actions">
+            <button
+              type="button"
+              class="btn small"
+              :disabled="exporter.busy.value"
+              :aria-busy="exporter.exportingKey.value === `sample:${sample.id}`"
+              title="Download as an MP3 (muted tracks are left out)"
+              @click="exportSample(sample.id)"
+            >
+              {{ exporter.exportingKey.value === `sample:${sample.id}` ? exporter.status.value : 'Download MP3' }}
+            </button>
+            <span v-if="exporter.errorKey.value === `sample:${sample.id}`" class="error small" role="alert">{{ exporter.error.value }}</span>
+          </div>
         </li>
       </ul>
     </section>
@@ -179,6 +217,23 @@ h1 {
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--muted);
+}
+.song-card {
+  display: flex;
+  flex-direction: column;
+}
+.song-link {
+  flex: 1;
+}
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 0 18px 16px;
+}
+.card-actions .btn {
+  font-variant-numeric: tabular-nums;
 }
 .delete {
   position: absolute;

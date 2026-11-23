@@ -2,6 +2,8 @@
 import { computed } from 'vue';
 import { useSongStore } from '@/stores/songStore';
 import { useAudioEngine } from '@/composables/useAudioEngine';
+import { useSongExport } from '@/composables/useSongExport';
+import { audibleTracks } from '@/audio/renderSong';
 import { instrument } from '@/utils/instruments';
 import { TIME_SIGNATURES, formatPosition } from '@/utils/music';
 
@@ -11,6 +13,11 @@ const emit = defineEmits<{ save: [] }>();
 const store = useSongStore();
 const audio = useAudioEngine();
 const loadingLabel = computed(() => audio.loading.value.map((id) => instrument(id).label.toLowerCase()).join(', '));
+
+const exporter = useSongExport();
+const exportingHere = computed(() => exporter.exportingKey.value === 'studio');
+const exportError = computed(() => (exporter.errorKey.value === 'studio' ? exporter.error.value : null));
+const canExport = computed(() => audibleTracks(store.song).length > 0);
 
 const isPlaying = computed(() => audio.state.value === 'playing');
 const position = computed(() => formatPosition(Math.floor(audio.currentBeat.value), store.song.timeSignature));
@@ -79,9 +86,21 @@ defineExpose({ togglePlay });
 
     <div class="save-area">
       <span v-if="loadingLabel" class="muted small">Loading {{ loadingLabel }}…</span>
+      <span v-if="exportError" class="error small" role="alert">{{ exportError }}</span>
       <span v-if="saveError" class="error small">{{ saveError }}</span>
       <span v-else-if="store.dirty" class="muted small">Unsaved changes</span>
       <span v-else-if="store.song.id" class="muted small">Saved</span>
+      <button
+        type="button"
+        class="btn export"
+        :disabled="!canExport || exporter.busy.value"
+        :aria-busy="exportingHere"
+        :title="canExport ? 'Download the song as an MP3 (muted tracks are left out)' : 'Add notes to an unmuted track to export'"
+        @click="exporter.exportMp3(store.song)"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4h2v9.2l3.3-3.3 1.4 1.4L12 17l-5.7-5.7 1.4-1.4 3.3 3.3zM5 18h14v2H5z" /></svg>
+        <span aria-live="polite">{{ exportingHere ? exporter.status.value : 'Export MP3' }}</span>
+      </button>
       <button type="button" class="btn btn-primary" :disabled="store.saving" title="Save (Ctrl+S)" @click="emit('save')">
         {{ store.saving ? 'Saving…' : 'Save' }}
       </button>
@@ -136,10 +155,22 @@ defineExpose({ togglePlay });
 .field.inline input {
   width: 5.5em;
 }
+.export {
+  min-width: 9.5em;
+  font-variant-numeric: tabular-nums;
+}
+.export svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex: none;
+}
 .save-area {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 12px;
   margin-left: auto;
 }
 </style>

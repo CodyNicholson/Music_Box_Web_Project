@@ -3,17 +3,9 @@ import { computed, reactive, readonly, ref } from 'vue';
 import type { InstrumentId, NoteEvent, Song } from '@/types/music';
 import { useSongStore } from '@/stores/songStore';
 import { DURATION_BEATS, songLengthBeats } from '@/utils/music';
-import { instrument } from '@/utils/instruments';
+import { createVoice, loadSamples, ROOM_REVERB, type InstrumentVoice } from '@/audio/voices';
 
 export type PlaybackState = 'stopped' | 'playing' | 'paused';
-
-/** What the engine needs from an instrument: sustained notes for pitched ones, one-shots for drums. */
-interface InstrumentVoice {
-  play(pitch: string, seconds: number, time: number, velocity: number): void;
-  attack(pitch: string, time: number, velocity: number): void;
-  release(pitch: string, time: number): void;
-  releaseAll(): void;
-}
 
 type PartValue = { time: string; trackId: string; note: NoteEvent };
 
@@ -35,116 +27,19 @@ let songEndBeat = 0;
  */
 let room: Tone.Reverb | null = null;
 function roomBus(): Tone.Reverb {
-  if (!room) room = new Tone.Reverb({ decay: 2.2, preDelay: 0.012, wet: 0.22 }).toDestination();
+  if (!room) room = new Tone.Reverb(ROOM_REVERB).toDestination();
   return room;
-}
-
-/**
- * A sampled, pitched instrument. Plays the nearest recorded sample, pitch-shifted to the note, like
- * Tone.Sampler, but keeps its own record of what is sounding. Tone.Sampler's release re-stops every
- * source of that pitch, including ones already fading out, and re-stopping cancels the fade, so
- * long, overlapping tails would jump back to full volume.
- */
-function samplerVoice(id: InstrumentId): InstrumentVoice {
-  const def = instrument(id);
-  const { urls, baseUrl, ring, release } = def.sampler!;
-  const byMidi = Object.fromEntries(Object.entries(urls).map(([note, file]) => [Tone.Frequency(note).toMidi(), file]));
-  const sampleMidis = Object.keys(byMidi).map(Number);
-  const buffers = new Tone.ToneAudioBuffers({
-    urls: byMidi,
-    baseUrl,
-    onload: () => loaded.add(id),
-    onerror: (err) => {
-      console.error(`Could not load ${def.label} samples`, err);
-      failed.add(id);
-    },
-  });
-  const output = new Tone.Gain().connect(roomBus());
-
-  /** The most recent sound for each pitch, and when it starts (or started) to fade out. */
-  const sounding = new Map<number, { source: Tone.ToneBufferSource; releaseAt: number }>();
-
-  /** Starts the fade-out at `time`, unless this pitch is already fading by then. */
-  function damp(midi: number, time: number) {
-    const entry = sounding.get(midi);
-    if (!entry || entry.releaseAt <= time) return;
-    entry.source.stop(time);
-    entry.releaseAt = time;
-  }
-
-  function strike(pitch: string, time: number, velocity: number, releaseAt = Infinity) {
-    if (!buffers.loaded) return;
-    const midi = Tone.Frequency(pitch).toMidi();
-    // Striking the same pitch again damps the sound still ringing from the last time it was played
-    // (like a re-struck piano key or a re-plucked string) instead of stacking a second copy on top.
-    damp(midi, time);
-    const closest = sampleMidis.reduce((best, m) => (Math.abs(m - midi) < Math.abs(best - midi) ? m : best));
-    const buffer = buffers.get(closest);
-    const playbackRate = Tone.intervalToFrequencyRatio(midi - closest);
-    const source = new Tone.ToneBufferSource({ url: buffer, playbackRate, fadeOut: release, curve: 'exponential' }).connect(output);
-    const naturalEnd = time + buffer.duration / playbackRate;
-    source.start(time, 0, buffer.duration / playbackRate, velocity);
-    if (releaseAt < naturalEnd) source.stop(releaseAt);
-    const entry = { source, releaseAt: Math.min(releaseAt, naturalEnd) };
-    sounding.set(midi, entry);
-    source.onended = () => {
-      if (sounding.get(midi) === entry) sounding.delete(midi);
-    };
-  }
-
-  return {
-    // Let the note ring past its written length so it overlaps naturally with the next one.
-    play: (pitch, seconds, time, velocity) => strike(pitch, time, velocity, time + seconds + ring),
-    attack: (pitch, time, velocity) => strike(pitch, time, velocity),
-    release: (pitch, time) => damp(Tone.Frequency(pitch).toMidi(), time),
-    releaseAll: () => {
-      const now = Tone.immediate();
-      sounding.forEach((_, midi) => damp(midi, now));
-    },
-  };
-}
-
-/**
- * Acoustic drum kit: sampled kick, snare, hi-hat and toms (one file per drum, so nothing is
- * pitch-shifted) and a synthesized crash cymbal. Hits ring out regardless of the written length.
- */
-function drumVoice(): InstrumentVoice {
-  const files: Record<string, string> = { C2: 'kick.mp3', D2: 'snare.mp3', 'F#2': 'hihat.mp3', D3: 'tom1.mp3', B2: 'tom2.mp3', G2: 'tom3.mp3' };
-  const kit = new Tone.Sampler({
-    urls: files,
-    baseUrl: 'https://tonejs.github.io/audio/drum-samples/acoustic-kit/',
-    release: 1,
-    onload: () => loaded.add('drums'),
-    onerror: (err) => {
-      console.error('Could not load drum samples', err);
-      failed.add('drums');
-    },
-  }).connect(roomBus());
-  const crash = new Tone.MetalSynth({
-    envelope: { attack: 0.001, decay: 1.6, release: 0.4 },
-    harmonicity: 5.1,
-    modulationIndex: 40,
-    resonance: 5000,
-    octaves: 1.2,
-    volume: -16,
-  }).connect(roomBus());
-  const hit = (pitch: string, time: number, velocity: number) => {
-    if (pitch === 'C#3') crash.triggerAttackRelease(320, 1.6, time, velocity);
-    else if (pitch in files) kit.triggerAttack(pitch, time, velocity);
-  };
-  return {
-    play: (pitch, _seconds, time, velocity) => hit(pitch, time, velocity),
-    attack: hit,
-    release: () => {},
-    releaseAll: () => kit.releaseAll(),
-  };
 }
 
 function getVoice(id: InstrumentId): InstrumentVoice {
   let voice = voices.get(id);
   if (!voice) {
-    voice = id === 'drums' ? drumVoice() : samplerVoice(id);
+    voice = createVoice(id, roomBus());
     voices.set(id, voice);
+    loadSamples(id).then(
+      () => loaded.add(id),
+      () => failed.add(id),
+    );
   }
   return voice;
 }
@@ -183,7 +78,8 @@ export function useAudioEngine() {
 
     stop();
     song.tracks.forEach((t) => getVoice(t.instrument));
-    await Promise.all([Tone.loaded(), roomBus().ready]);
+    // An instrument whose samples failed to download stays silent rather than blocking the others.
+    await Promise.all([...song.tracks.map((t) => loadSamples(t.instrument).catch(() => {})), roomBus().ready]);
     const allNotes = song.tracks.flatMap((t) => t.notes);
     if (allNotes.length === 0) return;
 
