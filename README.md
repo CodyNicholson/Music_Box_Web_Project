@@ -48,10 +48,12 @@ A bare `Cf-Access-Authenticated-User-Email` header is rejected.
 - **Local development** (no Access on localhost): set `ALLOW_DEV_AUTH=true` (and optionally
   `DEV_CF_EMAIL`) in `.env`. The login page then takes any email. Never enable this in production.
 
-Instrument samples load from `tonejs.github.io` (Salamander piano, acoustic drum kit) and
+Instrument samples load from `tonejs.github.io` (Salamander piano, acoustic drum kit),
 `nbrosowsky.github.io` ([tonejs-instruments](https://github.com/nbrosowsky/tonejs-instruments), CC-BY 3.0:
-guitars, bass, violin, cello, flute), so playback needs internet access. Each instrument downloads the
-first time it appears in a song.
+guitars, bass guitar, violin, cello, double bass, flute, clarinet, saxophone, trumpet, trombone) and
+`gleitz.github.io` ([midi-js-soundfonts](https://github.com/gleitz/midi-js-soundfonts), FluidR3 GM, MIT:
+dulcimer), so playback needs internet access. Each instrument downloads the first time it appears in a
+song.
 
 ### Security
 

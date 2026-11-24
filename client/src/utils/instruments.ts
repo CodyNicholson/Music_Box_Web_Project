@@ -89,6 +89,10 @@ for (let octave = 2; octave <= 6; octave++) {
 // Samples from nbrosowsky/tonejs-instruments (CC-BY 3.0), served from GitHub Pages.
 const TONEJS_INSTRUMENTS = 'https://nbrosowsky.github.io/tonejs-instruments/samples/';
 
+// General MIDI soundfont renders from gleitz/midi-js-soundfonts (FluidR3 GM, MIT), for instruments
+// tonejs-instruments doesn't have. Their files use flats ("Eb4"), so only natural notes are listed.
+const GM_SOUNDFONT = 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/';
+
 const SPLIT_MIDI = 60; // middle C: piano notes from here up go on the treble staff
 
 export const INSTRUMENTS: InstrumentDef[] = [
@@ -188,6 +192,23 @@ export const INSTRUMENTS: InstrumentDef[] = [
     },
   },
   {
+    id: 'double-bass',
+    label: 'Double bass',
+    icon: '🎻',
+    kind: 'pitched',
+    // Written an octave above how it sounds, like the bass guitar.
+    staves: [{ clef: 'bass', octaveDown: true }],
+    range: ['E1', 'G4'],
+    keyboard: ['C1', 'C4'],
+    defaultPitch: 'E2',
+    sampler: {
+      baseUrl: `${TONEJS_INSTRUMENTS}contrabass/`,
+      urls: sampleUrls(['Fs1', 'G1', 'As1', 'C2', 'D2', 'E2', 'Fs2', 'Gs2', 'A2', 'Cs3', 'E3', 'Gs3', 'B3']),
+      ring: 0.2,
+      release: 1.8,
+    },
+  },
+  {
     id: 'flute',
     label: 'Flute',
     icon: '🪈',
@@ -201,6 +222,90 @@ export const INSTRUMENTS: InstrumentDef[] = [
       urls: sampleUrls(['C4', 'E4', 'A4', 'C5', 'E5', 'A5', 'C6', 'E6', 'A6', 'C7']),
       ring: 0.05,
       release: 1,
+    },
+  },
+  // Clarinet, saxophone, trumpet and trombone are written at sounding (concert) pitch, like every
+  // other staff in the score, rather than transposed for a B-flat or E-flat part.
+  {
+    id: 'clarinet',
+    label: 'Clarinet',
+    icon: '🪈',
+    kind: 'pitched',
+    staves: [{ clef: 'treble' }],
+    range: ['D3', 'A#6'],
+    keyboard: ['C3', 'C6'],
+    defaultPitch: 'G4',
+    sampler: {
+      baseUrl: `${TONEJS_INSTRUMENTS}clarinet/`,
+      urls: sampleUrls(['D3', 'F3', 'As3', 'D4', 'F4', 'As4', 'D5', 'F5', 'As5', 'D6', 'Fs6']),
+      ring: 0.05,
+      release: 1,
+    },
+  },
+  {
+    id: 'saxophone',
+    label: 'Saxophone',
+    icon: '🎷',
+    kind: 'pitched',
+    staves: [{ clef: 'treble' }],
+    // Alto saxophone.
+    range: ['C#3', 'A5'],
+    keyboard: ['C3', 'C6'],
+    defaultPitch: 'D4',
+    sampler: {
+      baseUrl: `${TONEJS_INSTRUMENTS}saxophone/`,
+      urls: sampleUrls(['Cs3', 'E3', 'G3', 'As3', 'Cs4', 'E4', 'G4', 'As4', 'Cs5', 'E5', 'G5', 'A5']),
+      ring: 0.05,
+      release: 1,
+    },
+  },
+  {
+    id: 'trumpet',
+    label: 'Trumpet',
+    icon: '🎺',
+    kind: 'pitched',
+    staves: [{ clef: 'treble' }],
+    range: ['F#3', 'D6'],
+    keyboard: ['C3', 'C6'],
+    defaultPitch: 'G4',
+    sampler: {
+      baseUrl: `${TONEJS_INSTRUMENTS}trumpet/`,
+      urls: sampleUrls(['F3', 'A3', 'C4', 'Ds4', 'F4', 'G4', 'As4', 'D5', 'F5', 'A5', 'C6']),
+      ring: 0.05,
+      release: 1,
+    },
+  },
+  {
+    id: 'trombone',
+    label: 'Trombone',
+    icon: '🎺',
+    kind: 'pitched',
+    staves: [{ clef: 'bass' }],
+    range: ['E2', 'C5'],
+    keyboard: ['C2', 'C5'],
+    defaultPitch: 'F3',
+    sampler: {
+      baseUrl: `${TONEJS_INSTRUMENTS}trombone/`,
+      urls: sampleUrls(['Ds2', 'F2', 'Gs2', 'As2', 'C3', 'D3', 'Ds3', 'F3', 'Gs3', 'As3', 'C4', 'D4', 'F4']),
+      ring: 0.05,
+      release: 1.2,
+    },
+  },
+  {
+    id: 'dulcimer',
+    label: 'Dulcimer',
+    icon: '🪕',
+    kind: 'pitched',
+    // Hammered dulcimer (General MIDI program 16): struck strings that ring on, like a piano.
+    staves: [{ clef: 'treble' }],
+    range: ['C3', 'E6'],
+    keyboard: ['C3', 'C6'],
+    defaultPitch: 'D4',
+    sampler: {
+      baseUrl: `${GM_SOUNDFONT}dulcimer-mp3/`,
+      urls: sampleUrls(['C3', 'E3', 'G3', 'C4', 'E4', 'G4', 'C5', 'E5', 'G5', 'C6', 'E6']),
+      ring: 1,
+      release: 3,
     },
   },
   {

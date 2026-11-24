@@ -43,7 +43,7 @@ model SongTrack {
   songId     String  @map("song_id")
   position   Int // Order of the track's staves in the score, top to bottom (0-based)
   name       String
-  instrument String  @default("piano") // piano, acoustic-guitar, electric-guitar, bass-guitar, violin, cello, flute, drums
+  instrument String  @default("piano") // see INSTRUMENTS in src/schemas.ts
   volume     Float   @default(0.8) // Track volume (0.0 to 1.0), multiplied into each note's velocity
   muted      Boolean @default(false)
 

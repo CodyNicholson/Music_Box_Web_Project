@@ -17,7 +17,13 @@ export type InstrumentId =
   | 'bass-guitar'
   | 'violin'
   | 'cello'
+  | 'double-bass'
   | 'flute'
+  | 'clarinet'
+  | 'saxophone'
+  | 'trumpet'
+  | 'trombone'
+  | 'dulcimer'
   | 'drums';
 
 /** One instrument in a song, drawn as its own staff (or grand staff) and played together with the others. */

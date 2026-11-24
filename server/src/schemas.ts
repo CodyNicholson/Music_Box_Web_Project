@@ -31,7 +31,13 @@ export const INSTRUMENTS = [
   'bass-guitar',
   'violin',
   'cello',
+  'double-bass',
   'flute',
+  'clarinet',
+  'saxophone',
+  'trumpet',
+  'trombone',
+  'dulcimer',
   'drums',
 ] as const;
 
